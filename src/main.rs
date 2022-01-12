@@ -1,10 +1,12 @@
+#[macro_use]
+extern crate log;
 use eventstore::{ClientSettings, ClientSettingsParseError, ProjectionClient};
 use structopt::StructOpt;
 
 static PROJECTION_FILE: &'static str = include_str!("../etc/projection.js");
 #[derive(StructOpt, Debug)]
 struct Params {
-    #[structopt(short = "c",  long = "connection-string", default_value = "esdb://localhost:2113", parse(try_from_str = parse_connection_string))]
+    #[structopt(short = "c",  long = "connection-string", default_value = "esdb://localhost:2113?tls=false", parse(try_from_str = parse_connection_string))]
     conn_setts: ClientSettings,
 }
 
@@ -23,24 +25,28 @@ async fn main() -> crate::Result<()> {
     let mut name_gen = names::Generator::default();
 
     let proj_name = name_gen.next().unwrap();
-    let client = ProjectionClient::create(params.conn_setts).await?;
+    let client = ProjectionClient::new(params.conn_setts);
 
     client
-        .create_continuous_projection(proj_name.as_str(), PROJECTION_FILE.to_string(), true, None)
+        .create(proj_name.as_str(), PROJECTION_FILE.to_string(), &Default::default())
         .await?;
+    info!("complete first projection creation");
 
-    client.abort_projection(proj_name.as_str(), None).await?;
+    client.abort(proj_name.as_str(), &Default::default()).await?;
+    info!("complete projection abort");
 
     client
-        .delete_projection(proj_name.as_str(), true, true, true, None)
+        .delete(proj_name.as_str(), &Default::default())
         .await?;
+    info!("complete projection delete");
 
     let proj_name = name_gen.next().unwrap();
 
     // The server is likely to send an error at that level.
     client
-        .create_continuous_projection(proj_name.as_str(), PROJECTION_FILE.to_string(), true, None)
+        .create(proj_name.as_str(), PROJECTION_FILE.to_string(), &Default::default())
         .await?;
+    info!("complete second projection creation");
 
     Ok(())
 }
